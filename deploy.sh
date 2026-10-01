@@ -4,12 +4,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 [ "${1:-}" = "--no-build" ] || ./knockpage.py
-REMOTE=$(git remote get-url origin)
 REV=$(git rev-parse --short HEAD)$(git diff --quiet HEAD -- src knockpage.py || echo -dirty)
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 cp -a www/. "$TMP"/
 git -C "$TMP" init -q -b gh-pages
 git -C "$TMP" add -A
 git -C "$TMP" -c user.name="$(git config user.name)" -c user.email="$(git config user.email)" commit -q -m "Build of $REV"
-git -C "$TMP" push -q -f "$REMOTE" gh-pages
+git fetch -q "$TMP" gh-pages                    # push from this repo, with its remote and credentials
+git push -q -f origin FETCH_HEAD:refs/heads/gh-pages
 echo "pushed gh-pages ($REV); live at https://key.gregy.cz/ within a minute or two"
