@@ -134,12 +134,6 @@ input[type=text]:focus { outline: none; box-shadow: inset var(--px) var(--px) 0 
 .btn:focus-visible { outline: 3px dashed var(--rune); outline-offset: 6px; }
 .btn:disabled { filter: grayscale(.8) brightness(.7); cursor: wait; }
 
-.check { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; font: 20px/1.2 "VT323", monospace; color: var(--ink-dim); cursor: pointer; }
-.check input { appearance: none; width: 20px; height: 20px; margin: 0; flex: none; background: var(--stone-lo);
-  box-shadow: inset 4px 4px 0 0 var(--edge); cursor: pointer; }
-.check input:checked { background: var(--gold); box-shadow: inset 4px 4px 0 0 var(--gold-lo), inset -4px -4px 0 0 #fff0b0; }
-.check input:focus-visible { outline: 2px dashed var(--rune); outline-offset: 3px; }
-
 .status { min-height: 1.25em; margin: 14px 0 0; font-size: 24px; }
 .status.ok { color: var(--gold); }
 .status.work { color: var(--rune); }
