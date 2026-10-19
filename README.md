@@ -34,8 +34,10 @@ doesn't end up in GitHub's request logs. The page also drops it from the address
   `redirect=` may be pasted **unencoded** (with its own `?`, `&`, `#`); it greedily takes the rest of
   the fragment. Only `https://*.gregy.cz` targets are accepted (no open redirect).
 - `https://key.gregy.cz/#key=<secret>`: knock, then offer a "continue to the photos" button.
-- `https://key.gregy.cz/`: ask for the secret (the dungeon gate), optionally remember it on the device,
-  then knock. A remembered secret knocks automatically on the next visit.
+- `https://key.gregy.cz/`: ask for the secret (the dungeon gate), then knock.
+
+A secret that opened the gate is always remembered on the device (localStorage), so the next visit knocks
+automatically; "forget the saved word" clears it, and a saved word that stops working is dropped.
 
 The secret match is **case/diacritics/separator-insensitive**: `Tajné Slovo`, `tajne-slovo` and
 `tajne_slovo` are the same.

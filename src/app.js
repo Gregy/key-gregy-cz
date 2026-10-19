@@ -20,7 +20,6 @@
       intro: 'Fotky a další poklady jsou schované za bránou. Zadej tajné slovo a brána se ti na 12 hodin otevře.',
       label: 'Tajné slovo',
       go: 'Odemknout',
-      remember: 'Zapamatovat si slovo na tomto zařízení',
       toPhotos: 'Pokračovat do fotek',
       next: 'Pokračovat',
       hint: 'Brána se otevře jen pro síť, ze které jsi právě připojený. Když přejdeš na jinou Wi-Fi nebo na mobilní data (nebo za 12 hodin), otevři tuhle stránku znovu.',
@@ -41,7 +40,6 @@
       intro: 'Photos and other treasures are hidden behind this gate. Say the secret word and the gate will open for you for 12 hours.',
       label: 'Secret word',
       go: 'Unlock',
-      remember: 'Remember the word on this device',
       toPhotos: 'Continue to the photos',
       next: 'Continue',
       hint: 'The gate opens only for the network you are connected from right now. If you switch to another Wi-Fi or to mobile data (or after 12 hours), open this page again.',
@@ -167,7 +165,7 @@
 
   // ---- UI -------------------------------------------------------------------
   const ui = {
-    form: $('form'), input: $('secret'), go: $('go'), remember: $('remember'), status: $('status'),
+    form: $('form'), input: $('secret'), go: $('go'), status: $('status'),
     done: $('done'), cont: $('continue'), forgetwrap: $('forgetwrap'), forget: $('forget'),
   };
   const say = (text, cls) => { ui.status.textContent = text; ui.status.className = 'status' + (cls ? ' ' + cls : ''); };
@@ -193,7 +191,7 @@
         ui.input.focus(); ui.input.select();
         return;
       }
-      if (ui.remember.checked) { store.set(secret); ui.forgetwrap.hidden = false; }
+      store.set(secret); ui.forgetwrap.hidden = false;
 
       const ip = await publicIp(t.host, t.ip);
       for (let round = 0; round < ROUNDS; round++) {
@@ -222,8 +220,14 @@
   }
 
   // ---- wire up --------------------------------------------------------------
-  const scene = makeScene($('scene'));
-  drawKeyIcon($('keyicon'));
+  // The art is decoration: if canvas is unavailable (privacy hardening, old browser), knock without it.
+  let scene;
+  try { scene = makeScene($('scene')); drawKeyIcon($('keyicon')); }
+  catch (e) {
+    console.warn('scene disabled:', e);
+    scene = { reset() {}, knock() {}, open() {}, fail() {} };
+    $('scene').parentElement.hidden = true; $('keyicon').hidden = true;
+  }
   try { document.body.style.backgroundImage = `url(${wallTile()})`; } catch (e) { /* plain background */ }
 
   // Never knock from inside someone else's frame (Pages can't send X-Frame-Options / frame-ancestors).
