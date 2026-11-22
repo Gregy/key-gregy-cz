@@ -2,14 +2,13 @@
 // The knock target and ports live in #locks, encrypted with the secret; the page source reveals nothing.
 //
 //   https://key.gregy.cz/#key=<secret>&redirect=<https://x.gregy.cz/...>   knock, then go there
-//   https://key.gregy.cz/#key=<secret>                                     knock, then offer the photos
+//   https://key.gregy.cz/#key=<secret>                                     knock, then offer the home link
 //   https://key.gregy.cz/                                                  ask for the secret
 // The secret travels in the fragment, which browsers never send to the server (GitHub Pages logs URLs).
 'use strict';
 (() => {
   const $ = (id) => document.getElementById(id);
   const STORE = 'key.gregy.cz/secret';
-  const HOME = 'https://photos.example.com/';
   const KNOCK_TIMEOUT_MS = 2500;  // a knock is answered with a RST at once; this only covers networks that drop it
   const ROUNDS = 2;               // a second pass recovers from a stray SYN that broke the first; harmless otherwise
 
@@ -20,7 +19,6 @@
       intro: 'Fotky a další poklady jsou schované za bránou. Zadej tajné slovo a brána se ti na 12 hodin otevře.',
       label: 'Tajné slovo',
       go: 'Odemknout',
-      toPhotos: 'Pokračovat do fotek',
       next: 'Pokračovat',
       hint: 'Brána se otevře jen pro síť, ze které jsi právě připojený. Když přejdeš na jinou Wi-Fi nebo na mobilní data (nebo za 12 hodin), otevři tuhle stránku znovu.',
       forget: 'Zapomenout uložené slovo',
@@ -40,7 +38,6 @@
       intro: 'Photos and other treasures are hidden behind this gate. Say the secret word and the gate will open for you for 12 hours.',
       label: 'Secret word',
       go: 'Unlock',
-      toPhotos: 'Continue to the photos',
       next: 'Continue',
       hint: 'The gate opens only for the network you are connected from right now. If you switch to another Wi-Fi or to mobile data (or after 12 hours), open this page again.',
       forget: 'Forget the saved word',
@@ -123,7 +120,7 @@
         pw, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
       try {
         const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(L.i) }, key, b64(L.c));
-        return JSON.parse(new TextDecoder().decode(pt));       // { host, ip, ports:[...] }
+        return JSON.parse(new TextDecoder().decode(pt));       // { ip, ports:[...], home }
       } catch (e) { /* wrong secret for this lock */ }
     }
     return null;
@@ -136,25 +133,9 @@
     const t = setTimeout(() => ctl.abort(), ms);
     try { return await fetch(url, { ...opts, signal: ctl.signal }); } finally { clearTimeout(t); }
   }
-  function isPublicV4(ip) {
-    const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(ip);
-    if (!m) return false;
-    const a = +m[1], b = +m[2];
-    return !(a === 10 || a === 127 || a === 0 || a >= 224 || (a === 172 && b >= 16 && b < 32)
-      || (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b < 128));
-  }
-  // Knock the public IP, not the hostname: at home the names resolve to LAN addresses, and a public page
-  // reaching a LAN address makes Chrome prompt for "local network access". Resolve over DoH; fall back to
-  // the address baked in at build time. (From the LAN a knock is simply a no-op and isn't needed.)
-  async function publicIp(host, fallback) {
-    try {
-      const r = await fetchT('https://cloudflare-dns.com/dns-query?type=A&name=' + encodeURIComponent(host),
-        { headers: { accept: 'application/dns-json' }, credentials: 'omit', cache: 'no-store' }, 2500);
-      const ip = ((await r.json()).Answer || []).filter((a) => a.type === 1).map((a) => a.data).find(isPublicV4);
-      if (ip) return ip;
-    } catch (e) { /* DoH blocked or slow */ }
-    return fallback;
-  }
+  // Knock the public IP baked in at build time, not a hostname: at home the names resolve to LAN addresses,
+  // and a public page reaching a LAN address makes Chrome prompt for "local network access".
+  // (From the LAN a knock is simply a no-op and isn't needed.)
   async function knockPort(ip, port) {
     // Always "fails" (the port is refused with a RST); only the outgoing SYN matters.
     try {
@@ -193,7 +174,7 @@
       }
       store.set(secret); ui.forgetwrap.hidden = false;
 
-      const ip = await publicIp(t.host, t.ip);
+      const ip = t.ip;
       for (let round = 0; round < ROUNDS; round++) {
         for (let i = 0; i < t.ports.length; i++) {
           if (round === 0) say(T.knocking(i + 1, t.ports.length), 'work');
@@ -204,8 +185,8 @@
       }
 
       scene.open();
-      ui.cont.href = redirect || HOME;
-      ui.cont.textContent = redirect ? T.next : T.toPhotos;
+      ui.cont.href = redirect || t.home;
+      ui.cont.textContent = T.next;
       ui.done.hidden = false;
       if (redirect) {
         say(T.openGoing, 'ok');

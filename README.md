@@ -10,18 +10,20 @@ Hosted on GitHub Pages from the `gh-pages` branch, which [`deploy.sh`](deploy.sh
 ```
 visitor's browser ── https://key.gregy.cz/#key=<secret>&redirect=<https://x.gregy.cz/…>
   1. decrypt the knock target with <secret>         (AES-GCM; the page source alone reveals nothing)
-  2. resolve the home public IP over DoH             (cloudflare-dns.com; falls back to a baked-in IP)
-  3. fetch https://<ip>:<port>/ for each knock port  (each a TCP SYN, refused with RST: that's the knock)
-  4. redirect to <redirect>, or offer a "continue to the photos" button
+  2. fetch https://<ip>:<port>/ for each knock port  (each a TCP SYN, refused with RST: that's the knock)
+  3. redirect to <redirect>, or offer a "continue" button to the home link
           │
           ▼ the router sees the SYNs in order → opens the gated services to the visitor's IP for 12 h
 ```
-- The knock host, fallback IP and port sequence are **encrypted into the page** with AES-256-GCM under
+- The home public IP, the port sequence and the home link (where "continue" goes without `redirect=`)
+  are **encrypted into the page** with AES-256-GCM under
   a PBKDF2-SHA256 key derived from the secret. Without a secret the page is inert and the ports aren't
   in the source. This is light protection (see [Security](#security)), matching the knock's own
   threat model: it keeps dumb bots out, and the real protection is the services' own logins.
-- The browser knocks the **public IP**, resolved over DoH, not the hostname. At home the names resolve
+- The browser knocks the **public IP** baked in at build time, not a hostname. At home the names resolve
   to LAN addresses, and a public page reaching a LAN address trips Chrome's "local network access" prompt.
+  There is no DNS lookup (no third party learns the name), so the IP must be static: when it changes,
+  run `./deploy.sh` again.
 - Knocking uses `fetch(..., {mode:'no-cors'})`. The TLS handshake to an IP fails, but the TCP SYN (all
   the knock needs) has already gone out. The sequence runs twice: harmless, and it recovers from a
   stray SYN that reset the first pass.
@@ -33,7 +35,7 @@ doesn't end up in GitHub's request logs. The page also drops it from the address
 - `https://key.gregy.cz/#key=<secret>&redirect=<https://…gregy.cz/…>`: knock, then go to `<redirect>`.
   `redirect=` may be pasted **unencoded** (with its own `?`, `&`, `#`); it greedily takes the rest of
   the fragment. Only `https://*.gregy.cz` targets are accepted (no open redirect).
-- `https://key.gregy.cz/#key=<secret>`: knock, then offer a "continue to the photos" button.
+- `https://key.gregy.cz/#key=<secret>`: knock, then offer a "continue" button to the home link.
 - `https://key.gregy.cz/`: ask for the secret (the dungeon gate), then knock.
 
 A secret that opened the gate is always remembered on the device (localStorage), so the next visit knocks
@@ -52,7 +54,7 @@ The page speaks **Czech or English**, whichever comes first in the browser's pre
 | `src/fonts/` | Self-hosted Press Start 2P and VT323 (SIL OFL 1.1, licences alongside). |
 | `src/CNAME`, `src/.nojekyll` | GitHub Pages: the custom domain, and no Jekyll processing. |
 | `knockpage.py` | Build: encrypt the knock target under each secret into `www/`. |
-| `knock.local.env` (**not committed**) | Build settings: `PORTS_ENV` (file with the `K1`/`K2`/`K3` knock ports, kept with the router config), `KNOCK_HOST`, `KNOCK_IP`. See [`knock.local.env.example`](knock.local.env.example). |
+| `knock.local.env` (**not committed**) | Build settings: `PORTS_ENV` (file with the `K1`/`K2`/`K3` knock ports, kept with the router config), `KNOCK_IP`, `KNOCK_HOME`. See [`knock.local.env.example`](knock.local.env.example). |
 | `key-secrets.txt` (0600, **not committed**) | The secret(s), one per line. |
 | `deploy.sh` | Build, then force-push `www/` as the single-commit `gh-pages` branch. |
 
@@ -77,7 +79,7 @@ GitHub Pages setup (done once): source = branch `gh-pages` `/`, custom domain `k
 - The secret **never leaves the browser**: it travels in the fragment, `<meta name="referrer"
   content="no-referrer">` is set, and the knock fetches send no referrer or credentials.
 - CSP as a `<meta>` tag (`default-src 'none'`; scripts, styles and fonts from `'self'`; `connect-src
-  https:` for DoH and the knock), no open redirect. Pages can't send `X-Frame-Options` or
+  https:` for the knock), no open redirect. Pages can't send `X-Frame-Options` or
   `frame-ancestors`, so the script refuses to do anything when it's framed.
 - An opened IP stays open for 12 h. Behind carrier-grade NAT, others sharing that IP get in too (the
   same caveat as any knock).

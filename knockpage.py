@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Build the key.gregy.cz knock page: encrypt the knock target into src/index.html -> www/.
 
-The knock host, fallback public IP and port sequence are encrypted with AES-256-GCM under a key
+The home public IP, the port sequence and the home link are encrypted with AES-256-GCM under a key
 derived (PBKDF2-HMAC-SHA256) from each secret, so the page source gives nothing away without a
 secret. One "lock" per secret; any of them opens the page. The JS tries each lock in turn.
 
 Settings come from knock.local.env (not committed; see knock.local.env.example) or the command line:
-the knock ports are read from the file PORTS_ENV points to (K1/K2/K3), the name to resolve from
-KNOCK_HOST and the fallback IP from KNOCK_IP. Secrets come from key-secrets.txt (mode 600, one per
-line, '#' comments ignored) unless given with --secret.
+the knock ports are read from the file PORTS_ENV points to (K1/K2/K3), the IP to knock from KNOCK_IP
+(baked in: rebuild when it changes) and the home link (where "continue" goes without redirect=) from
+KNOCK_HOME. Secrets come from key-secrets.txt (mode 600, one per line, '#' comments ignored) unless
+given with --secret.
 
     ./knockpage.py                         # settings from knock.local.env, secrets from key-secrets.txt
     ./knockpage.py --secret "tajne slovo"  # one-off secret, no file
@@ -16,7 +17,7 @@ line, '#' comments ignored) unless given with --secret.
 
 Then publish with ./deploy.sh (pushes www/ to the gh-pages branch).
 """
-import argparse, base64, json, os, re, shutil, sys, unicodedata
+import argparse, base64, ipaddress, json, os, re, shutil, sys, unicodedata
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -84,8 +85,8 @@ def main():
     local = read_env(LOCAL_ENV) if LOCAL_ENV.exists() else {}
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--secret", action="append", help="a secret (repeatable); overrides key-secrets.txt")
-    ap.add_argument("--host", default=local.get("KNOCK_HOST"), help="name the page resolves over DoH (KNOCK_HOST)")
-    ap.add_argument("--ip", default=local.get("KNOCK_IP"), help="fallback public IP if DoH fails (KNOCK_IP)")
+    ap.add_argument("--ip", default=local.get("KNOCK_IP"), help="home public IPv4 to knock (KNOCK_IP)")
+    ap.add_argument("--home", default=local.get("KNOCK_HOME"), help="where the continue button goes without redirect= (KNOCK_HOME)")
     ap.add_argument("--ports", help="comma-separated knock ports; default from the PORTS_ENV file")
     ap.add_argument("--list", action="store_true", help="just list the secrets that would be built in")
     args = ap.parse_args()
@@ -96,15 +97,23 @@ def main():
             print(f"{s!r}  ->  normalized {normalize(s)!r}")
         return
 
-    if not (args.host and args.ip):
-        sys.exit(f"need the knock host and fallback IP: KNOCK_HOST/KNOCK_IP in {LOCAL_ENV.name}, or --host/--ip")
+    if not args.ip:
+        sys.exit(f"need the IP to knock: KNOCK_IP in {LOCAL_ENV.name}, or --ip")
+    try:
+        ip = ipaddress.ip_address(args.ip)
+    except ValueError:
+        sys.exit(f"KNOCK_IP {args.ip!r} is not an IP address")
+    if ip.version != 4 or not ip.is_global:
+        sys.exit(f"KNOCK_IP {args.ip} must be a public IPv4 address")
+    if not args.home or not re.match(r"https://[^/?#\s]+/\S*$", args.home):
+        sys.exit(f"need the home link as an https:// URL with a path: KNOCK_HOME in {LOCAL_ENV.name}, or --home")
     if args.ports:
         ports = [int(p) for p in args.ports.split(",")]
     elif "PORTS_ENV" in local:
         ports = read_ports(local["PORTS_ENV"])
     else:
         sys.exit(f"need the knock ports: PORTS_ENV in {LOCAL_ENV.name}, or --ports")
-    payload = json.dumps({"host": args.host, "ip": args.ip, "ports": ports}, separators=(",", ":")).encode()
+    payload = json.dumps({"ip": str(ip), "ports": ports, "home": args.home}, separators=(",", ":")).encode()
     locks = [make_lock(s, payload) for s in secrets]
     locks_json = json.dumps(locks, separators=(",", ":"))
 
@@ -125,7 +134,7 @@ def main():
         sys.exit("src/index.html has no @LOCKS@ placeholder")
     (OUT / "index.html").write_text(html.replace("@LOCKS@", locks_json))
 
-    print(f"built {OUT} with {len(locks)} lock(s), ports {ports}, host {args.host} ({args.ip})")
+    print(f"built {OUT} with {len(locks)} lock(s), ports {ports}, ip {ip}, home {args.home}")
     print(f"index.html {OUT.joinpath('index.html').stat().st_size} bytes")
 
 
