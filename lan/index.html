@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- LAN variant of key.gregy.cz (see README.md): no knock, just follow redirect=. The script hash is checked by knockpage.py. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ElCd5M9YXAr1sCBp8uH4/hTY0EZNHcsmcqdqwoj1NbQ='; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark light">
+<title>key.gregy.cz</title>
+<style>body { font: 18px/1.5 system-ui, sans-serif; max-width: 36em; margin: 15vh auto; padding: 0 1em; }</style>
+</head>
+<body>
+<p lang="cs">Jsi v domácí síti, brána tu není potřeba.</p>
+<p lang="en">You're on the home network; the gate isn't needed here.</p>
+<script>
+'use strict';
+// Same link format as the public page: #key=<ignored>&redirect=<https://x.gregy.cz/...>, where an
+// unencoded redirect= takes the rest of the fragment. Go there at once; no secret, no knock.
+function go() {
+  var q = location.hash.slice(1), m = /(^|&)redirect=/.exec(q);
+  if (!m) { if (q) history.replaceState(null, '', location.pathname); return; }   // drop a lone #key=
+  var raw = q.slice(m.index + m[0].length);
+  if (/^https?%3A/i.test(raw)) {
+    var end = raw.indexOf('&');
+    try { raw = decodeURIComponent(end < 0 ? raw : raw.slice(0, end)); } catch (e) { return; }
+  }
+  try {
+    var u = new URL(raw);   // only our own https sites, never back to this page: no open redirect
+    if (u.protocol === 'https:' && (u.hostname === 'gregy.cz' || u.hostname.endsWith('.gregy.cz'))
+        && u.hostname !== location.hostname) { location.replace(u.href); return; }
+  } catch (e) { /* not a URL */ }
+  history.replaceState(null, '', location.pathname);
+}
+addEventListener('hashchange', go);
+go();
+</script>
+</body>
+</html>
