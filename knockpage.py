@@ -17,7 +17,7 @@ given with --secret.
 
 Then publish with ./deploy.sh (pushes www/ to the gh-pages branch).
 """
-import argparse, base64, ipaddress, json, os, re, shutil, sys, unicodedata
+import argparse, base64, hashlib, ipaddress, json, os, re, shutil, sys, unicodedata
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -81,6 +81,17 @@ def make_lock(secret: str, payload: bytes) -> dict:
     return {"s": b64(salt), "i": b64(iv), "n": ITERATIONS, "c": b64(ct)}
 
 
+def build_lan():
+    """lan/index.html (the page the home router serves as key.gregy.cz): pin its inline script in the CSP."""
+    path = OUT / "lan" / "index.html"
+    html = path.read_text()
+    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+    if len(scripts) != 1 or "@HASH@" not in html:
+        sys.exit("src/lan/index.html needs exactly one inline <script> and the @HASH@ placeholder")
+    digest = b64(hashlib.sha256(scripts[0].encode()).digest())
+    path.write_text(html.replace("@HASH@", digest))
+
+
 def main():
     local = read_env(LOCAL_ENV) if LOCAL_ENV.exists() else {}
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -133,6 +144,7 @@ def main():
     if "@LOCKS@" not in html:
         sys.exit("src/index.html has no @LOCKS@ placeholder")
     (OUT / "index.html").write_text(html.replace("@LOCKS@", locks_json))
+    build_lan()
 
     print(f"built {OUT} with {len(locks)} lock(s), ports {ports}, ip {ip}, home {args.home}")
     print(f"index.html {OUT.joinpath('index.html').stat().st_size} bytes")

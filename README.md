@@ -52,6 +52,7 @@ The page speaks **Czech or English**, whichever comes first in the browser's pre
 |---|---|
 | `src/index.html`, `style.css`, `app.js`, `scene.js` | The page. `app.js` has the texts (cs/en), crypto, knock and flow. `scene.js` is the pixel-art dungeon gate: a 160×120 canvas with per-pixel dithered torch lighting, scaled up by whole pixels. `@LOCKS@` in index.html is filled by the build. |
 | `src/fonts/` | Self-hosted Press Start 2P and VT323 (SIL OFL 1.1, licences alongside). |
+| `src/lan/index.html` | The [LAN variant](#lan-variant): one self-contained file, no knock. The build pins its inline script's hash into its CSP (`@HASH@`). |
 | `src/CNAME`, `src/.nojekyll` | GitHub Pages: the custom domain, and no Jekyll processing. |
 | `knockpage.py` | Build: encrypt the knock target under each secret into `www/`. |
 | `knock.local.env` (**not committed**) | Build settings: `PORTS_ENV` (file with the `K1`/`K2`/`K3` knock ports, kept with the router config), `KNOCK_IP`, `KNOCK_HOME`. See [`knock.local.env.example`](knock.local.env.example). |
@@ -70,6 +71,18 @@ from `PORTS_ENV`, so the page follows. To preview locally: `./knockpage.py && py
 
 GitHub Pages setup (done once): source = branch `gh-pages` `/`, custom domain `key.gregy.cz`,
 *Enforce HTTPS* on. DNS: `key.gregy.cz CNAME gregy.github.io` (DNS-only, not proxied).
+
+## LAN variant
+At home the knock isn't needed, so the home router overrides `key.gregy.cz` in its DNS and serves
+[`lan/index.html`](src/lan/index.html) itself. The same links then work without a secret or a wait: the page
+reads `redirect=` exactly like the public one (same `https://*.gregy.cz` rule, `key=` ignored) and goes
+there at once. Without a `redirect=` it just says the gate isn't needed at home. It has no home link on
+purpose, since it's published too.
+
+It's deployed with the rest, at `https://key.gregy.cz/lan/`. The router can't fetch it from there (at home
+that name points back at the router), so it takes it from
+`https://raw.githubusercontent.com/Gregy/key-gregy-cz/gh-pages/lan/index.html`, and serves it for `/` over
+HTTPS with a certificate valid for `key.gregy.cz` (the `*.gregy.cz` wildcard covers it).
 
 ## Security
 - The secret is **light protection**, on purpose. PBKDF2 (200k iterations) slows brute force, but the
